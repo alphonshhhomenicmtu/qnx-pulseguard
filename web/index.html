@@ -1,0 +1,780 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>QNX-PulseGuard — RTOS IPC Jitter &amp; Watchdog Telemetry Console</title>
+<link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='6' fill='%23090d14'/%3E%3Cpath d='M4 17h5l3-8 4 14 4-10 3 4h5' fill='none' stroke='%2306b6d4' stroke-width='2.6' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E">
+<style>
+  :root {
+    --bg: #080c12;
+    --panel: #101722;
+    --panel-alt: #151e2c;
+    --border: #1e293b;
+    --text: #e2e8f0;
+    --muted: #94a3b8;
+    --cyan: #06b6d4;
+    --emerald: #10b981;
+    --amber: #f59e0b;
+    --red: #ef4444;
+    --violet: #a78bfa;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: radial-gradient(circle at top right, #0d1b2a 0%, var(--bg) 55%);
+    color: var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Inter, sans-serif;
+    line-height: 1.45;
+  }
+  .mono {
+    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+    font-variant-numeric: tabular-nums;
+  }
+  header {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: space-between;
+    align-items: center;
+    gap: 12px;
+    padding: 12px 24px;
+    border-bottom: 1px solid var(--border);
+    background: rgba(16, 23, 34, 0.92);
+  }
+  .brand {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+  .brand h1 {
+    margin: 0;
+    font-size: 18px;
+    font-weight: 700;
+    letter-spacing: 0.02em;
+  }
+  .sub {
+    font-size: 12px;
+    color: var(--muted);
+  }
+  .controls {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px;
+  }
+  button, .file-btn {
+    background: var(--panel-alt);
+    color: var(--text);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 6px 12px;
+    font-size: 12px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: border-color 0.15s, background 0.15s;
+  }
+  button:hover, .file-btn:hover {
+    border-color: var(--cyan);
+    background: #1a2538;
+  }
+  button.primary {
+    background: rgba(6, 182, 212, 0.16);
+    border-color: var(--cyan);
+    color: #67e8f9;
+  }
+  input[type="file"] { display: none; }
+  .pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 4px 10px;
+    border-radius: 999px;
+    font-size: 11px;
+    font-weight: 600;
+    background: rgba(16, 185, 129, 0.12);
+    border: 1px solid rgba(16, 185, 129, 0.4);
+    color: #6ee7b7;
+  }
+  main {
+    max-width: 1440px;
+    margin: 0 auto;
+    padding: 12px 24px 18px;
+    display: grid;
+    gap: 11px;
+  }
+  .kpi-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(175px, 1fr));
+    gap: 12px;
+  }
+  .card {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 14px 16px;
+  }
+  .kpi-label {
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--muted);
+  }
+  .kpi-val {
+    margin-top: 6px;
+    font-size: 24px;
+    font-weight: 700;
+    color: #f8fafc;
+  }
+  .kpi-foot {
+    margin-top: 4px;
+    font-size: 11px;
+    color: var(--muted);
+  }
+  .scrubber-bar {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 12px;
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 10px 16px;
+  }
+  .scrubber-bar input[type="range"] {
+    flex: 1 1 260px;
+    accent-color: var(--cyan);
+  }
+  .two-col {
+    display: grid;
+    grid-template-columns: minmax(0, 1.45fr) minmax(0, 1fr);
+    gap: 16px;
+  }
+  @media (max-width: 980px) {
+    .two-col { grid-template-columns: 1fr; }
+  }
+  .section-hdr {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 12px;
+  }
+  .section-hdr h2 {
+    margin: 0;
+    font-size: 14px;
+    font-weight: 600;
+    letter-spacing: 0.02em;
+  }
+  .legend {
+    display: flex;
+    gap: 12px;
+    font-size: 11px;
+    color: var(--muted);
+  }
+  .dot {
+    display: inline-block;
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    margin-right: 4px;
+  }
+  svg.chart {
+    width: 100%;
+    height: 210px;
+    display: block;
+    background: #0b111a;
+    border-radius: 8px;
+    border: 1px solid #182233;
+  }
+  .workers-grid {
+    display: grid;
+    gap: 10px;
+  }
+  .worker-row {
+    background: var(--panel-alt);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 10px 12px;
+  }
+  .worker-top {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 6px;
+  }
+  .state-badge {
+    font-size: 11px;
+    font-weight: 700;
+    padding: 2px 8px;
+    border-radius: 4px;
+    letter-spacing: 0.04em;
+  }
+  .state-OK { background: rgba(16,185,129,0.16); color: #6ee7b7; border: 1px solid rgba(16,185,129,0.4); }
+  .state-WARN { background: rgba(245,158,11,0.18); color: #fcd34d; border: 1px solid rgba(245,158,11,0.45); }
+  .state-BREACH { background: rgba(239,68,68,0.2); color: #fca5a5; border: 1px solid rgba(239,68,68,0.5); }
+  .state-RECOVERING { background: rgba(167,139,250,0.2); color: #ddd6fe; border: 1px solid rgba(167,139,250,0.45); }
+  .state-RESTARTED { background: rgba(6,182,212,0.2); color: #67e8f9; border: 1px solid rgba(6,182,212,0.45); }
+  .gauge-track {
+    width: 100%;
+    height: 7px;
+    background: #090e16;
+    border-radius: 999px;
+    overflow: hidden;
+    margin: 6px 0;
+  }
+  .gauge-fill {
+    height: 100%;
+    border-radius: 999px;
+    transition: width 0.18s ease;
+  }
+  .worker-meta {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 12px;
+    font-size: 11px;
+    color: var(--muted);
+  }
+  .table-wrap {
+    max-height: 152px;
+    overflow: auto;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+  }
+  .inspector-grid {
+    display: grid;
+    grid-template-columns: minmax(0, 1.35fr) minmax(0, 1fr);
+    gap: 12px;
+  }
+  @media (max-width: 980px) {
+    .inspector-grid { grid-template-columns: 1fr; }
+  }
+  .jsonl-stream {
+    max-height: 132px;
+    overflow: auto;
+    background: #0b111a;
+    border: 1px solid #182233;
+    border-radius: 8px;
+    padding: 6px 0;
+    font-size: 11px;
+    line-height: 1.44;
+  }
+  .jsonl-line {
+    display: flex;
+    gap: 10px;
+    padding: 2px 10px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    cursor: pointer;
+    color: var(--muted);
+  }
+  .jsonl-line:hover {
+    background: rgba(148, 163, 184, 0.08);
+  }
+  .jsonl-line.active-jsonl {
+    background: rgba(6, 182, 212, 0.14);
+    color: #e2e8f0;
+    border-left: 3px solid var(--cyan);
+    padding-left: 7px;
+  }
+  .jsonl-ln {
+    color: #475569;
+    min-width: 24px;
+    text-align: right;
+    user-select: none;
+  }
+  .jsonl-pretty {
+    margin: 0;
+    max-height: 132px;
+    overflow: auto;
+    background: #0b111a;
+    border: 1px solid #182233;
+    border-radius: 8px;
+    padding: 8px 12px;
+    font-size: 11px;
+    line-height: 1.38;
+    color: #a5f3fc;
+  }
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 12px;
+  }
+  th, td {
+    padding: 7px 10px;
+    border-bottom: 1px solid #192334;
+    text-align: left;
+  }
+  th {
+    position: sticky;
+    top: 0;
+    background: #0e1520;
+    color: var(--muted);
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+  }
+  tr.active-row {
+    background: rgba(6, 182, 212, 0.12);
+  }
+</style>
+</head>
+<body>
+<header>
+  <div class="brand">
+    <svg width="30" height="30" viewBox="0 0 32 32" aria-hidden="true">
+      <rect width="32" height="32" rx="7" fill="#0b1220" stroke="#1e293b"/>
+      <path d="M4 17h5l3-8 4 14 4-10 3 4h5" fill="none" stroke="#06b6d4" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/>
+    </svg>
+    <div>
+      <h1>QNX-PulseGuard Telemetry Console</h1>
+      <div class="sub">Deterministic Microkernel IPC Jitter &amp; Sub-10ms Deadline Watchdog (&nbsp;/dev/pulseguard JSONL&nbsp;)</div>
+    </div>
+  </div>
+  <div class="controls">
+    <span class="pill mono" id="source-badge">SOURCE: REPLAY</span>
+    <button id="btn-play" class="primary">Play</button>
+    <button id="btn-step">Step +1</button>
+    <button id="btn-jump-fault">Jump to Fault</button>
+    <button id="btn-reset">Reset</button>
+    <label class="file-btn">Load .jsonl<input type="file" id="file-input" accept=".jsonl,.json,.txt"></label>
+    <a class="file-btn" href="./qnx-pulseguard-deck.pdf" target="_blank" rel="noopener" style="text-decoration:none;">Deck PDF</a>
+    <a class="file-btn" href="https://github.com/alphonshhhomenicmtu/qnx-pulseguard" target="_blank" rel="noopener" style="text-decoration:none;">GitHub</a>
+  </div>
+</header>
+
+<main>
+  <section class="kpi-grid">
+    <div class="card">
+      <div class="kpi-label">IPC Latency p50 / p99</div>
+      <div class="kpi-val mono" id="kpi-p50-p99">-- / -- us</div>
+      <div class="kpi-foot mono" id="kpi-mean">mean: -- us · p95: -- us</div>
+    </div>
+    <div class="card">
+      <div class="kpi-label">Tail Jitter p99.9 / Max</div>
+      <div class="kpi-val mono" id="kpi-p999-max">-- / -- us</div>
+      <div class="kpi-foot mono" id="kpi-platform">platform: --</div>
+    </div>
+    <div class="card">
+      <div class="kpi-label">Total IPC Pulses</div>
+      <div class="kpi-val mono" id="kpi-pulses">0</div>
+      <div class="kpi-foot mono" id="kpi-dropped">dropped: 0 (wait-free SPSC)</div>
+    </div>
+    <div class="card">
+      <div class="kpi-label">Watchdog Recoveries</div>
+      <div class="kpi-val mono" id="kpi-restarts" style="color: var(--emerald);">0</div>
+      <div class="kpi-foot mono" id="kpi-recovery">last recovery: -- us (&lt; 10ms SLA)</div>
+    </div>
+    <div class="card">
+      <div class="kpi-label">Priority Inversions</div>
+      <div class="kpi-val mono" id="kpi-inversions" style="color: var(--amber);">0</div>
+      <div class="kpi-foot mono" id="kpi-seq">record seq: 0 / 0</div>
+    </div>
+  </section>
+
+  <section class="scrubber-bar">
+    <span class="mono" style="font-size:12px; color:var(--muted);">TIMELINE</span>
+    <input type="range" id="scrubber" min="0" max="0" value="0">
+    <span class="mono" id="scrubber-label" style="font-size:12px;">0 / 0</span>
+  </section>
+
+  <section class="two-col">
+    <div class="card">
+      <div class="section-hdr">
+        <h2>IPC Pulse Latency Timeline (us)</h2>
+        <div class="legend">
+          <span><i class="dot" style="background:var(--cyan);"></i>p50</span>
+          <span><i class="dot" style="background:var(--amber);"></i>p99</span>
+          <span><i class="dot" style="background:var(--violet);"></i>p99.9</span>
+          <span><i class="dot" style="background:var(--red);"></i>Fault Event</span>
+        </div>
+      </div>
+      <svg id="jitter-svg" class="chart" viewBox="0 0 760 250" preserveAspectRatio="none"></svg>
+    </div>
+
+    <div class="card">
+      <div class="section-hdr">
+        <h2>Real-Time Worker Watchdog States</h2>
+        <span class="mono" style="font-size:11px; color:var(--muted);">Warn 3.5ms · Breach 6.5ms</span>
+      </div>
+      <div class="workers-grid" id="workers-grid"></div>
+    </div>
+  </section>
+
+  <section class="card">
+    <div class="section-hdr">
+      <h2>Watchdog State Transitions &amp; Fault-Recovery Ledger</h2>
+      <span class="mono" style="font-size:11px; color:var(--muted);" id="event-count-label">0 fault events</span>
+    </div>
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>Seq</th>
+            <th>Worker</th>
+            <th>Transition</th>
+            <th>Reason</th>
+            <th>Observed Delay</th>
+            <th>Recovery Latency</th>
+            <th>Epoch</th>
+            <th>PI Escalated</th>
+          </tr>
+        </thead>
+        <tbody id="events-tbody" class="mono"></tbody>
+      </table>
+    </div>
+  </section>
+
+  <section class="card">
+    <div class="section-hdr">
+      <h2>Raw /dev/pulseguard JSONL Stream Inspector</h2>
+      <span class="mono" style="font-size:11px; color:var(--muted);" id="inspector-meta">record 0 / 0 · 0 B</span>
+    </div>
+    <div class="inspector-grid">
+      <div class="jsonl-stream mono" id="jsonl-stream"></div>
+      <pre class="jsonl-pretty mono" id="jsonl-pretty">{}</pre>
+    </div>
+  </section>
+</main>
+
+<script>
+const EMBEDDED_SAMPLE_JSONL = [
+  '{"type":"telemetry","seq":1,"ts_us":3414994481676,"platform":"POSIX-MACOS","total_pulses":63,"dropped_pulses":0,"p50_us":10,"p95_us":31,"p99_us":54,"p999_us":54,"max_us":54,"mean_us":13.29,"restarts":0,"inversions":0,"last_recovery_us":0,"workers":[{"id":0,"name":"lidar_fusion","state":"OK","prio":24,"epoch":1,"pulses":21,"missed":0,"restarts":0,"last_us":4,"p99_us":54,"recovery_us":0,"inversion":false},{"id":1,"name":"brake_actuator","state":"OK","prio":22,"epoch":1,"pulses":21,"missed":0,"restarts":0,"last_us":12,"p99_us":53,"recovery_us":0,"inversion":false},{"id":2,"name":"imu_ekf","state":"OK","prio":20,"epoch":1,"pulses":21,"missed":0,"restarts":0,"last_us":9,"p99_us":31,"recovery_us":0,"inversion":false}]}',
+  '{"type":"telemetry","seq":2,"ts_us":3414994506726,"platform":"POSIX-MACOS","total_pulses":123,"dropped_pulses":0,"p50_us":12,"p95_us":32,"p99_us":53,"p999_us":54,"max_us":54,"mean_us":14.02,"restarts":0,"inversions":0,"last_recovery_us":0,"workers":[{"id":0,"name":"lidar_fusion","state":"OK","prio":24,"epoch":1,"pulses":41,"missed":0,"restarts":0,"last_us":29,"p99_us":54,"recovery_us":0,"inversion":false},{"id":1,"name":"brake_actuator","state":"OK","prio":22,"epoch":1,"pulses":41,"missed":0,"restarts":0,"last_us":45,"p99_us":53,"recovery_us":0,"inversion":false},{"id":2,"name":"imu_ekf","state":"OK","prio":20,"epoch":1,"pulses":41,"missed":0,"restarts":0,"last_us":31,"p99_us":35,"recovery_us":0,"inversion":false}]}',
+  '{"type":"telemetry","seq":3,"ts_us":3414994532007,"platform":"POSIX-MACOS","total_pulses":183,"dropped_pulses":0,"p50_us":10,"p95_us":32,"p99_us":61,"p999_us":88,"max_us":89,"mean_us":13.46,"restarts":0,"inversions":0,"last_recovery_us":0,"workers":[{"id":0,"name":"lidar_fusion","state":"OK","prio":24,"epoch":1,"pulses":61,"missed":0,"restarts":0,"last_us":89,"p99_us":88,"recovery_us":0,"inversion":false},{"id":1,"name":"brake_actuator","state":"OK","prio":22,"epoch":1,"pulses":61,"missed":0,"restarts":0,"last_us":61,"p99_us":61,"recovery_us":0,"inversion":false},{"id":2,"name":"imu_ekf","state":"OK","prio":20,"epoch":1,"pulses":61,"missed":0,"restarts":0,"last_us":47,"p99_us":47,"recovery_us":0,"inversion":false}]}',
+  '{"type":"telemetry","seq":4,"ts_us":3414994557086,"platform":"POSIX-MACOS","total_pulses":246,"dropped_pulses":0,"p50_us":10,"p95_us":31,"p99_us":54,"p999_us":88,"max_us":89,"mean_us":12.89,"restarts":0,"inversions":0,"last_recovery_us":0,"workers":[{"id":0,"name":"lidar_fusion","state":"OK","prio":24,"epoch":1,"pulses":82,"missed":0,"restarts":0,"last_us":12,"p99_us":88,"recovery_us":0,"inversion":false},{"id":1,"name":"brake_actuator","state":"OK","prio":22,"epoch":1,"pulses":82,"missed":0,"restarts":0,"last_us":19,"p99_us":61,"recovery_us":0,"inversion":false},{"id":2,"name":"imu_ekf","state":"OK","prio":20,"epoch":1,"pulses":82,"missed":0,"restarts":0,"last_us":11,"p99_us":47,"recovery_us":0,"inversion":false}]}',
+  '{"type":"telemetry","seq":5,"ts_us":3414994582253,"platform":"POSIX-MACOS","total_pulses":306,"dropped_pulses":0,"p50_us":10,"p95_us":31,"p99_us":53,"p999_us":88,"max_us":89,"mean_us":12.94,"restarts":0,"inversions":0,"last_recovery_us":0,"workers":[{"id":0,"name":"lidar_fusion","state":"OK","prio":24,"epoch":1,"pulses":102,"missed":0,"restarts":0,"last_us":6,"p99_us":54,"recovery_us":0,"inversion":false},{"id":1,"name":"brake_actuator","state":"OK","prio":22,"epoch":1,"pulses":102,"missed":0,"restarts":0,"last_us":14,"p99_us":53,"recovery_us":0,"inversion":false},{"id":2,"name":"imu_ekf","state":"OK","prio":20,"epoch":1,"pulses":102,"missed":0,"restarts":0,"last_us":10,"p99_us":35,"recovery_us":0,"inversion":false}]}',
+  '{"type":"telemetry","seq":6,"ts_us":3414994607662,"platform":"POSIX-MACOS","total_pulses":367,"dropped_pulses":0,"p50_us":10,"p95_us":31,"p99_us":54,"p999_us":88,"max_us":89,"mean_us":12.98,"restarts":0,"inversions":0,"last_recovery_us":0,"workers":[{"id":0,"name":"lidar_fusion","state":"OK","prio":24,"epoch":1,"pulses":123,"missed":0,"restarts":0,"last_us":8,"p99_us":74,"recovery_us":0,"inversion":false},{"id":1,"name":"brake_actuator","state":"OK","prio":22,"epoch":1,"pulses":122,"missed":0,"restarts":0,"last_us":9,"p99_us":53,"recovery_us":0,"inversion":false},{"id":2,"name":"imu_ekf","state":"OK","prio":20,"epoch":1,"pulses":122,"missed":0,"restarts":0,"last_us":5,"p99_us":44,"recovery_us":0,"inversion":false}]}',
+  '{"type":"telemetry","seq":7,"ts_us":3414994632980,"platform":"POSIX-MACOS","total_pulses":430,"dropped_pulses":0,"p50_us":10,"p95_us":29,"p99_us":53,"p999_us":88,"max_us":89,"mean_us":12.46,"restarts":0,"inversions":0,"last_recovery_us":0,"workers":[{"id":0,"name":"lidar_fusion","state":"OK","prio":24,"epoch":1,"pulses":144,"missed":0,"restarts":0,"last_us":8,"p99_us":74,"recovery_us":0,"inversion":false},{"id":1,"name":"brake_actuator","state":"OK","prio":22,"epoch":1,"pulses":143,"missed":0,"restarts":0,"last_us":11,"p99_us":53,"recovery_us":0,"inversion":false},{"id":2,"name":"imu_ekf","state":"OK","prio":20,"epoch":1,"pulses":143,"missed":0,"restarts":0,"last_us":4,"p99_us":47,"recovery_us":0,"inversion":false}]}',
+  '{"type":"telemetry","seq":8,"ts_us":3414994658202,"platform":"POSIX-MACOS","total_pulses":490,"dropped_pulses":0,"p50_us":10,"p95_us":31,"p99_us":61,"p999_us":88,"max_us":89,"mean_us":12.87,"restarts":0,"inversions":0,"last_recovery_us":0,"workers":[{"id":0,"name":"lidar_fusion","state":"OK","prio":24,"epoch":1,"pulses":164,"missed":0,"restarts":0,"last_us":7,"p99_us":74,"recovery_us":0,"inversion":false},{"id":1,"name":"brake_actuator","state":"OK","prio":22,"epoch":1,"pulses":163,"missed":0,"restarts":0,"last_us":3,"p99_us":61,"recovery_us":0,"inversion":false},{"id":2,"name":"imu_ekf","state":"OK","prio":20,"epoch":1,"pulses":163,"missed":0,"restarts":0,"last_us":8,"p99_us":47,"recovery_us":0,"inversion":false}]}',
+  '{"type":"telemetry","seq":9,"ts_us":3414994683401,"platform":"POSIX-MACOS","total_pulses":550,"dropped_pulses":0,"p50_us":10,"p95_us":32,"p99_us":54,"p999_us":88,"max_us":89,"mean_us":12.97,"restarts":0,"inversions":0,"last_recovery_us":0,"workers":[{"id":0,"name":"lidar_fusion","state":"OK","prio":24,"epoch":1,"pulses":184,"missed":0,"restarts":0,"last_us":21,"p99_us":74,"recovery_us":0,"inversion":false},{"id":1,"name":"brake_actuator","state":"OK","prio":22,"epoch":1,"pulses":183,"missed":0,"restarts":0,"last_us":7,"p99_us":61,"recovery_us":0,"inversion":false},{"id":2,"name":"imu_ekf","state":"OK","prio":20,"epoch":1,"pulses":183,"missed":0,"restarts":0,"last_us":34,"p99_us":47,"recovery_us":0,"inversion":false}]}',
+  '{"type":"telemetry","seq":10,"ts_us":3414994708970,"platform":"POSIX-MACOS","total_pulses":613,"dropped_pulses":0,"p50_us":10,"p95_us":32,"p99_us":57,"p999_us":88,"max_us":89,"mean_us":13.38,"restarts":0,"inversions":0,"last_recovery_us":0,"workers":[{"id":0,"name":"lidar_fusion","state":"OK","prio":24,"epoch":1,"pulses":205,"missed":0,"restarts":0,"last_us":12,"p99_us":58,"recovery_us":0,"inversion":false},{"id":1,"name":"brake_actuator","state":"OK","prio":22,"epoch":1,"pulses":204,"missed":0,"restarts":0,"last_us":10,"p99_us":54,"recovery_us":0,"inversion":false},{"id":2,"name":"imu_ekf","state":"OK","prio":20,"epoch":1,"pulses":204,"missed":0,"restarts":0,"last_us":10,"p99_us":48,"recovery_us":0,"inversion":false}]}',
+  '{"type":"fault_event","seq":11,"ts_us":3414994719580,"platform":"POSIX-MACOS","worker_id":0,"worker":"lidar_fusion","from":"OK","to":"WARN","reason":"WARN_JITTER","latency_us":3656,"recovery_us":0,"epoch":1,"inversion":false}',
+  '{"type":"fault_event","seq":12,"ts_us":3414994722696,"platform":"POSIX-MACOS","worker_id":0,"worker":"lidar_fusion","from":"WARN","to":"BREACH","reason":"MISSED_PULSE","latency_us":6772,"recovery_us":0,"epoch":1,"inversion":false}',
+  '{"type":"fault_event","seq":13,"ts_us":3414994722696,"platform":"POSIX-MACOS","worker_id":0,"worker":"lidar_fusion","from":"BREACH","to":"RECOVERING","reason":"MISSED_PULSE","latency_us":6772,"recovery_us":0,"epoch":2,"inversion":false}',
+  '{"type":"fault_event","seq":14,"ts_us":3414994722725,"platform":"POSIX-MACOS","worker_id":0,"worker":"lidar_fusion","from":"RECOVERING","to":"RESTARTED","reason":"RESPAWN_COMPLETE","latency_us":4,"recovery_us":29,"epoch":2,"inversion":false}',
+  '{"type":"fault_event","seq":15,"ts_us":3414994723978,"platform":"POSIX-MACOS","worker_id":0,"worker":"lidar_fusion","from":"RESTARTED","to":"OK","reason":"HYSTERESIS_CLEAR","latency_us":3,"recovery_us":0,"epoch":2,"inversion":false}',
+  '{"type":"telemetry","seq":16,"ts_us":3414994734549,"platform":"POSIX-MACOS","total_pulses":670,"dropped_pulses":0,"p50_us":10,"p95_us":32,"p99_us":57,"p999_us":88,"max_us":89,"mean_us":12.78,"restarts":1,"inversions":0,"last_recovery_us":29,"workers":[{"id":0,"name":"lidar_fusion","state":"OK","prio":24,"epoch":2,"pulses":222,"missed":1,"restarts":1,"last_us":4,"p99_us":58,"recovery_us":29,"inversion":false},{"id":1,"name":"brake_actuator","state":"OK","prio":22,"epoch":1,"pulses":224,"missed":0,"restarts":0,"last_us":8,"p99_us":54,"recovery_us":0,"inversion":false},{"id":2,"name":"imu_ekf","state":"OK","prio":20,"epoch":1,"pulses":224,"missed":0,"restarts":0,"last_us":5,"p99_us":48,"recovery_us":0,"inversion":false}]}',
+  '{"type":"telemetry","seq":17,"ts_us":3414994759658,"platform":"POSIX-MACOS","total_pulses":733,"dropped_pulses":0,"p50_us":10,"p95_us":31,"p99_us":54,"p999_us":88,"max_us":89,"mean_us":12.25,"restarts":1,"inversions":0,"last_recovery_us":29,"workers":[{"id":0,"name":"lidar_fusion","state":"OK","prio":24,"epoch":2,"pulses":243,"missed":1,"restarts":1,"last_us":4,"p99_us":58,"recovery_us":29,"inversion":false},{"id":1,"name":"brake_actuator","state":"OK","prio":22,"epoch":1,"pulses":245,"missed":0,"restarts":0,"last_us":10,"p99_us":54,"recovery_us":0,"inversion":false},{"id":2,"name":"imu_ekf","state":"OK","prio":20,"epoch":1,"pulses":245,"missed":0,"restarts":0,"last_us":3,"p99_us":48,"recovery_us":0,"inversion":false}]}',
+  '{"type":"telemetry","seq":18,"ts_us":3414994785171,"platform":"POSIX-MACOS","total_pulses":796,"dropped_pulses":0,"p50_us":9,"p95_us":31,"p99_us":54,"p999_us":88,"max_us":89,"mean_us":11.75,"restarts":1,"inversions":0,"last_recovery_us":29,"workers":[{"id":0,"name":"lidar_fusion","state":"OK","prio":24,"epoch":2,"pulses":264,"missed":1,"restarts":1,"last_us":10,"p99_us":58,"recovery_us":29,"inversion":false},{"id":1,"name":"brake_actuator","state":"OK","prio":22,"epoch":1,"pulses":266,"missed":0,"restarts":0,"last_us":7,"p99_us":54,"recovery_us":0,"inversion":false},{"id":2,"name":"imu_ekf","state":"OK","prio":20,"epoch":1,"pulses":266,"missed":0,"restarts":0,"last_us":6,"p99_us":48,"recovery_us":0,"inversion":false}]}',
+  '{"type":"telemetry","seq":19,"ts_us":3414994810598,"platform":"POSIX-MACOS","total_pulses":859,"dropped_pulses":0,"p50_us":9,"p95_us":31,"p99_us":54,"p999_us":88,"max_us":89,"mean_us":11.40,"restarts":1,"inversions":0,"last_recovery_us":29,"workers":[{"id":0,"name":"lidar_fusion","state":"OK","prio":24,"epoch":2,"pulses":285,"missed":1,"restarts":1,"last_us":4,"p99_us":58,"recovery_us":29,"inversion":false},{"id":1,"name":"brake_actuator","state":"OK","prio":22,"epoch":1,"pulses":287,"missed":0,"restarts":0,"last_us":11,"p99_us":54,"recovery_us":0,"inversion":false},{"id":2,"name":"imu_ekf","state":"OK","prio":20,"epoch":1,"pulses":287,"missed":0,"restarts":0,"last_us":3,"p99_us":48,"recovery_us":0,"inversion":false}]}',
+  '{"type":"fault_event","seq":20,"ts_us":3414994811750,"platform":"POSIX-MACOS","worker_id":1,"worker":"brake_actuator","from":"OK","to":"OK","reason":"PRIORITY_INVERSION","latency_us":10,"recovery_us":0,"epoch":1,"inversion":true}',
+  '{"type":"fault_event","seq":21,"ts_us":3414994811750,"platform":"POSIX-MACOS","worker_id":1,"worker":"brake_actuator","from":"OK","to":"WARN","reason":"PRIORITY_INVERSION","latency_us":1263,"recovery_us":0,"epoch":1,"inversion":true}',
+  '{"type":"fault_event","seq":22,"ts_us":3414994816462,"platform":"POSIX-MACOS","worker_id":1,"worker":"brake_actuator","from":"WARN","to":"OK","reason":"HYSTERESIS_CLEAR","latency_us":5,"recovery_us":0,"epoch":1,"inversion":false}',
+  '{"type":"telemetry","seq":23,"ts_us":3414994836129,"platform":"POSIX-MACOS","total_pulses":920,"dropped_pulses":0,"p50_us":8,"p95_us":29,"p99_us":53,"p999_us":88,"max_us":89,"mean_us":11.03,"restarts":1,"inversions":1,"last_recovery_us":29,"workers":[{"id":0,"name":"lidar_fusion","state":"OK","prio":24,"epoch":2,"pulses":307,"missed":1,"restarts":1,"last_us":5,"p99_us":54,"recovery_us":29,"inversion":false},{"id":1,"name":"brake_actuator","state":"OK","prio":22,"epoch":1,"pulses":306,"missed":0,"restarts":0,"last_us":4,"p99_us":53,"recovery_us":0,"inversion":false},{"id":2,"name":"imu_ekf","state":"OK","prio":20,"epoch":1,"pulses":307,"missed":0,"restarts":0,"last_us":9,"p99_us":47,"recovery_us":0,"inversion":false}]}',
+  '{"type":"telemetry","seq":24,"ts_us":3414994861332,"platform":"POSIX-MACOS","total_pulses":982,"dropped_pulses":0,"p50_us":8,"p95_us":29,"p99_us":53,"p999_us":88,"max_us":89,"mean_us":10.84,"restarts":1,"inversions":1,"last_recovery_us":29,"workers":[{"id":0,"name":"lidar_fusion","state":"OK","prio":24,"epoch":2,"pulses":327,"missed":1,"restarts":1,"last_us":5,"p99_us":54,"recovery_us":29,"inversion":false},{"id":1,"name":"brake_actuator","state":"OK","prio":22,"epoch":1,"pulses":327,"missed":0,"restarts":0,"last_us":7,"p99_us":53,"recovery_us":0,"inversion":false},{"id":2,"name":"imu_ekf","state":"OK","prio":20,"epoch":1,"pulses":328,"missed":0,"restarts":0,"last_us":4,"p99_us":47,"recovery_us":0,"inversion":false}]}',
+  '{"type":"telemetry","seq":25,"ts_us":3414994886435,"platform":"POSIX-MACOS","total_pulses":1045,"dropped_pulses":0,"p50_us":8,"p95_us":29,"p99_us":53,"p999_us":74,"max_us":89,"mean_us":10.63,"restarts":1,"inversions":1,"last_recovery_us":29,"workers":[{"id":0,"name":"lidar_fusion","state":"OK","prio":24,"epoch":2,"pulses":348,"missed":1,"restarts":1,"last_us":23,"p99_us":54,"recovery_us":29,"inversion":false},{"id":1,"name":"brake_actuator","state":"OK","prio":22,"epoch":1,"pulses":348,"missed":0,"restarts":0,"last_us":23,"p99_us":53,"recovery_us":0,"inversion":false},{"id":2,"name":"imu_ekf","state":"OK","prio":20,"epoch":1,"pulses":349,"missed":0,"restarts":0,"last_us":9,"p99_us":47,"recovery_us":0,"inversion":false}]}',
+  '{"type":"fault_event","seq":26,"ts_us":3414994904601,"platform":"POSIX-MACOS","worker_id":2,"worker":"imu_ekf","from":"OK","to":"WARN","reason":"WARN_JITTER","latency_us":3552,"recovery_us":0,"epoch":1,"inversion":false}',
+  '{"type":"fault_event","seq":27,"ts_us":3414994907640,"platform":"POSIX-MACOS","worker_id":2,"worker":"imu_ekf","from":"WARN","to":"BREACH","reason":"MISSED_PULSE","latency_us":6591,"recovery_us":0,"epoch":1,"inversion":false}',
+  '{"type":"fault_event","seq":28,"ts_us":3414994907640,"platform":"POSIX-MACOS","worker_id":2,"worker":"imu_ekf","from":"BREACH","to":"RECOVERING","reason":"MISSED_PULSE","latency_us":6591,"recovery_us":0,"epoch":2,"inversion":false}',
+  '{"type":"fault_event","seq":29,"ts_us":3414994907690,"platform":"POSIX-MACOS","worker_id":2,"worker":"imu_ekf","from":"RECOVERING","to":"RESTARTED","reason":"RESPAWN_COMPLETE","latency_us":8,"recovery_us":49,"epoch":2,"inversion":false}',
+  '{"type":"fault_event","seq":30,"ts_us":3414994908875,"platform":"POSIX-MACOS","worker_id":2,"worker":"imu_ekf","from":"RESTARTED","to":"OK","reason":"HYSTERESIS_CLEAR","latency_us":6,"recovery_us":0,"epoch":2,"inversion":false}',
+  '{"type":"telemetry","seq":31,"ts_us":3414994911545,"platform":"POSIX-MACOS","total_pulses":1103,"dropped_pulses":0,"p50_us":8,"p95_us":29,"p99_us":48,"p999_us":74,"max_us":89,"mean_us":10.44,"restarts":2,"inversions":1,"last_recovery_us":49,"workers":[{"id":0,"name":"lidar_fusion","state":"OK","prio":24,"epoch":2,"pulses":369,"missed":1,"restarts":1,"last_us":4,"p99_us":54,"recovery_us":29,"inversion":false},{"id":1,"name":"brake_actuator","state":"OK","prio":22,"epoch":1,"pulses":368,"missed":0,"restarts":0,"last_us":6,"p99_us":53,"recovery_us":0,"inversion":false},{"id":2,"name":"imu_ekf","state":"OK","prio":20,"epoch":2,"pulses":366,"missed":1,"restarts":1,"last_us":3,"p99_us":47,"recovery_us":49,"inversion":false}]}',
+  '{"type":"telemetry","seq":32,"ts_us":3414994936907,"platform":"POSIX-MACOS","total_pulses":1164,"dropped_pulses":0,"p50_us":7,"p95_us":28,"p99_us":48,"p999_us":74,"max_us":89,"mean_us":10.25,"restarts":2,"inversions":1,"last_recovery_us":49,"workers":[{"id":0,"name":"lidar_fusion","state":"OK","prio":24,"epoch":2,"pulses":389,"missed":1,"restarts":1,"last_us":3,"p99_us":54,"recovery_us":29,"inversion":false},{"id":1,"name":"brake_actuator","state":"OK","prio":22,"epoch":1,"pulses":389,"missed":0,"restarts":0,"last_us":4,"p99_us":53,"recovery_us":0,"inversion":false},{"id":2,"name":"imu_ekf","state":"OK","prio":20,"epoch":2,"pulses":386,"missed":1,"restarts":1,"last_us":3,"p99_us":47,"recovery_us":49,"inversion":false}]}',
+  '{"type":"telemetry","seq":33,"ts_us":3414994962250,"platform":"POSIX-MACOS","total_pulses":1227,"dropped_pulses":0,"p50_us":7,"p95_us":28,"p99_us":47,"p999_us":74,"max_us":89,"mean_us":10.15,"restarts":2,"inversions":1,"last_recovery_us":49,"workers":[{"id":0,"name":"lidar_fusion","state":"OK","prio":24,"epoch":2,"pulses":410,"missed":1,"restarts":1,"last_us":5,"p99_us":43,"recovery_us":29,"inversion":false},{"id":1,"name":"brake_actuator","state":"OK","prio":22,"epoch":1,"pulses":410,"missed":0,"restarts":0,"last_us":5,"p99_us":53,"recovery_us":0,"inversion":false},{"id":2,"name":"imu_ekf","state":"OK","prio":20,"epoch":2,"pulses":407,"missed":1,"restarts":1,"last_us":4,"p99_us":47,"recovery_us":49,"inversion":false}]}',
+  '{"type":"telemetry","seq":34,"ts_us":3414994987265,"platform":"POSIX-MACOS","total_pulses":1289,"dropped_pulses":0,"p50_us":7,"p95_us":27,"p99_us":47,"p999_us":74,"max_us":89,"mean_us":9.99,"restarts":2,"inversions":1,"last_recovery_us":49,"workers":[{"id":0,"name":"lidar_fusion","state":"OK","prio":24,"epoch":2,"pulses":431,"missed":1,"restarts":1,"last_us":5,"p99_us":43,"recovery_us":29,"inversion":false},{"id":1,"name":"brake_actuator","state":"OK","prio":22,"epoch":1,"pulses":430,"missed":0,"restarts":0,"last_us":5,"p99_us":53,"recovery_us":0,"inversion":false},{"id":2,"name":"imu_ekf","state":"OK","prio":20,"epoch":2,"pulses":428,"missed":1,"restarts":1,"last_us":4,"p99_us":47,"recovery_us":49,"inversion":false}]}',
+  '{"type":"telemetry","seq":35,"ts_us":3414995012275,"platform":"POSIX-MACOS","total_pulses":1352,"dropped_pulses":0,"p50_us":7,"p95_us":26,"p99_us":47,"p999_us":74,"max_us":89,"mean_us":9.87,"restarts":2,"inversions":1,"last_recovery_us":49,"workers":[{"id":0,"name":"lidar_fusion","state":"OK","prio":24,"epoch":2,"pulses":452,"missed":1,"restarts":1,"last_us":15,"p99_us":43,"recovery_us":29,"inversion":false},{"id":1,"name":"brake_actuator","state":"OK","prio":22,"epoch":1,"pulses":451,"missed":0,"restarts":0,"last_us":6,"p99_us":53,"recovery_us":0,"inversion":false},{"id":2,"name":"imu_ekf","state":"OK","prio":20,"epoch":2,"pulses":449,"missed":1,"restarts":1,"last_us":6,"p99_us":47,"recovery_us":49,"inversion":false}]}',
+  '{"type":"telemetry","seq":36,"ts_us":3414995013371,"platform":"POSIX-MACOS","total_pulses":1354,"dropped_pulses":0,"p50_us":7,"p95_us":26,"p99_us":47,"p999_us":74,"max_us":89,"mean_us":9.87,"restarts":2,"inversions":1,"last_recovery_us":49,"workers":[{"id":0,"name":"lidar_fusion","state":"OK","prio":24,"epoch":2,"pulses":453,"missed":1,"restarts":1,"last_us":8,"p99_us":43,"recovery_us":29,"inversion":false},{"id":1,"name":"brake_actuator","state":"OK","prio":22,"epoch":1,"pulses":451,"missed":0,"restarts":0,"last_us":6,"p99_us":53,"recovery_us":0,"inversion":false},{"id":2,"name":"imu_ekf","state":"OK","prio":20,"epoch":2,"pulses":450,"missed":1,"restarts":1,"last_us":10,"p99_us":47,"recovery_us":49,"inversion":false}]}'
+].join('\n');
+
+let records = [];
+let rawLines = [];
+let cursor = 0;
+let playTimer = null;
+
+function parseJsonl(text) {
+  const lines = text.split(/\r?\n/).map(s => s.trim()).filter(Boolean);
+  const parsed = [];
+  const raw = [];
+  for (const line of lines) {
+    try {
+      const obj = JSON.parse(line);
+      if (obj && (obj.type === 'telemetry' || obj.type === 'fault_event')) {
+        parsed.push(obj);
+        raw.push(line);
+      }
+    } catch (_) {
+      // Skip partial trailing lines during live capture tailing
+    }
+  }
+  return { parsed, raw };
+}
+
+function loadDataset(text, sourceLabel) {
+  const { parsed, raw } = parseJsonl(text);
+  if (!parsed.length) return;
+  records = parsed;
+  rawLines = raw;
+  cursor = records.length - 1;
+  document.getElementById('source-badge').textContent = 'SOURCE: ' + sourceLabel;
+  const scrubber = document.getElementById('scrubber');
+  scrubber.max = String(Math.max(0, records.length - 1));
+  scrubber.value = String(cursor);
+  renderAt(cursor);
+}
+
+function latestTelemetryUpTo(idx) {
+  for (let i = idx; i >= 0; i--) {
+    if (records[i].type === 'telemetry') return records[i];
+  }
+  return records.find(r => r.type === 'telemetry') || null;
+}
+
+function renderChart(idx) {
+  const svg = document.getElementById('jitter-svg');
+  const slice = records.slice(0, idx + 1);
+  const telemetry = slice.filter(r => r.type === 'telemetry');
+  const W = 760, H = 250, padL = 44, padR = 16, padT = 18, padB = 26;
+  const plotW = W - padL - padR;
+  const plotH = H - padT - padB;
+
+  if (telemetry.length === 0) {
+    svg.innerHTML = '';
+    return;
+  }
+
+  let maxVal = 100;
+  for (const t of telemetry) {
+    maxVal = Math.max(maxVal, t.p999_us || 0, t.p99_us || 0, 50);
+  }
+  maxVal = Math.ceil(maxVal * 1.15);
+
+  const xForSeq = (seq) => {
+    const minSeq = records[0].seq || 1;
+    const maxSeq = Math.max(minSeq + 1, records[idx].seq || records.length);
+    return padL + ((seq - minSeq) / (maxSeq - minSeq)) * plotW;
+  };
+  const yForUs = (us) => padT + plotH - (Math.min(us, maxVal) / maxVal) * plotH;
+
+  const buildPath = (key) => telemetry.map((t, i) =>
+    `${i === 0 ? 'M' : 'L'}${xForSeq(t.seq).toFixed(1)},${yForUs(t[key] || 0).toFixed(1)}`
+  ).join(' ');
+
+  let grid = '';
+  for (let i = 0; i <= 4; i++) {
+    const val = Math.round((maxVal * i) / 4);
+    const y = yForUs(val).toFixed(1);
+    grid += `<line x1="${padL}" y1="${y}" x2="${W - padR}" y2="${y}" stroke="#192334" stroke-dasharray="3,3"/>`;
+    grid += `<text x="${padL - 6}" y="${Number(y) + 4}" fill="#64748b" font-size="10" text-anchor="end" font-family="monospace">${val}</text>`;
+  }
+
+  let faultMarkers = '';
+  for (const r of slice) {
+    if (r.type === 'fault_event' && (r.to === 'BREACH' || r.reason === 'PRIORITY_INVERSION' || r.to === 'RESTARTED')) {
+      const x = xForSeq(r.seq).toFixed(1);
+      const color = r.to === 'RESTARTED' ? '#10b981' : (r.reason === 'PRIORITY_INVERSION' ? '#f59e0b' : '#ef4444');
+      faultMarkers += `<line x1="${x}" y1="${padT}" x2="${x}" y2="${H - padB}" stroke="${color}" stroke-width="1.3" stroke-opacity="0.7" stroke-dasharray="3,2"/>`;
+    }
+  }
+
+  svg.innerHTML = [
+    grid,
+    faultMarkers,
+    `<path d="${buildPath('p999_us')}" fill="none" stroke="#a78bfa" stroke-width="1.8"/>`,
+    `<path d="${buildPath('p99_us')}" fill="none" stroke="#f59e0b" stroke-width="2.1"/>`,
+    `<path d="${buildPath('p50_us')}" fill="none" stroke="#06b6d4" stroke-width="2.4"/>`
+  ].join('');
+}
+
+function renderWorkers(tel, recentFault) {
+  const grid = document.getElementById('workers-grid');
+  if (!tel || !Array.isArray(tel.workers)) {
+    grid.innerHTML = '';
+    return;
+  }
+  const activeWorkerOverlay = {};
+  if (recentFault && recentFault.type === 'fault_event') {
+    activeWorkerOverlay[recentFault.worker_id] = recentFault;
+  }
+  grid.innerHTML = tel.workers.map(w => {
+    const ov = activeWorkerOverlay[w.id];
+    const state = ov ? ov.to : w.state;
+    const inv = ov ? ov.inversion : w.inversion;
+    const prio = (inv && w.prio < 45) ? 45 : w.prio;
+    const epoch = ov ? ov.epoch : w.epoch;
+    const recUs = (ov && ov.recovery_us > 0) ? ov.recovery_us : w.recovery_us;
+    const utilPct = Math.min(100, Math.max(4, Math.round(((ov ? ov.latency_us : w.p99_us) / 6500) * 100)));
+    const barColor = state === 'BREACH'
+      ? 'var(--red)'
+      : (state === 'RECOVERING'
+        ? 'var(--violet)'
+        : (state === 'WARN' || inv
+          ? 'var(--amber)'
+          : (state === 'RESTARTED' ? 'var(--cyan)' : 'var(--emerald)')));
+    return `
+      <div class="worker-row">
+        <div class="worker-top">
+          <span class="mono" style="font-weight:700;">#${w.id} ${w.name}</span>
+          <span class="state-badge state-${state} mono">${state}${inv ? ' · PI-CEIL' : ''}</span>
+        </div>
+        <div class="gauge-track"><div class="gauge-fill" style="width:${utilPct}%;background:${barColor};"></div></div>
+        <div class="worker-meta mono">
+          <span>prio: ${prio}</span>
+          <span>epoch: ${epoch}</span>
+          <span>pulses: ${w.pulses}</span>
+          <span>p99: ${w.p99_us} us</span>
+          <span>restarts: ${w.restarts}</span>
+          <span>rec: ${recUs > 0 ? recUs + ' us' : '--'}</span>
+        </div>
+      </div>`;
+  }).join('');
+}
+
+function renderEvents(idx) {
+  const tbody = document.getElementById('events-tbody');
+  const events = records.slice(0, idx + 1).filter(r => r.type === 'fault_event');
+  document.getElementById('event-count-label').textContent = `${events.length} fault / hysteresis events`;
+  const rows = events.slice().reverse().slice(0, 40).map((ev, i) => `
+    <tr class="${i === 0 && records[idx].seq === ev.seq ? 'active-row' : ''}">
+      <td>${ev.seq}</td>
+      <td>${ev.worker}</td>
+      <td><span class="state-badge state-${ev.to}">${ev.from} &rarr; ${ev.to}</span></td>
+      <td>${ev.reason}</td>
+      <td>${ev.latency_us} us</td>
+      <td style="color:${ev.recovery_us > 0 ? 'var(--emerald)' : 'var(--muted)'};">${ev.recovery_us > 0 ? ev.recovery_us + ' us' : '--'}</td>
+      <td>${ev.epoch}</td>
+      <td>${ev.inversion ? 'YES' : 'no'}</td>
+    </tr>`);
+  tbody.innerHTML = rows.join('');
+}
+
+function renderInspector(idx) {
+  const streamEl = document.getElementById('jsonl-stream');
+  const prettyEl = document.getElementById('jsonl-pretty');
+  const metaEl = document.getElementById('inspector-meta');
+  const raw = rawLines[idx] || JSON.stringify(records[idx]);
+  metaEl.textContent = `record ${idx + 1} / ${records.length} · seq ${records[idx].seq} · ${raw.length} B`;
+
+  streamEl.innerHTML = '';
+  const start = Math.max(0, Math.min(idx - 3, Math.max(0, records.length - 6)));
+  const end = Math.min(records.length, start + 6);
+  const frag = document.createDocumentFragment();
+  for (let i = start; i < end; i++) {
+    const row = document.createElement('div');
+    row.className = 'jsonl-line' + (i === idx ? ' active-jsonl' : '');
+    const ln = document.createElement('span');
+    ln.className = 'jsonl-ln';
+    ln.textContent = String(i + 1);
+    const txt = document.createElement('span');
+    txt.textContent = rawLines[i] || JSON.stringify(records[i]);
+    row.appendChild(ln);
+    row.appendChild(txt);
+    row.addEventListener('click', () => {
+      stopPlayback();
+      renderAt(i);
+    });
+    frag.appendChild(row);
+  }
+  streamEl.appendChild(frag);
+  prettyEl.textContent = JSON.stringify(records[idx], null, 2);
+}
+
+function renderAt(idx) {
+  if (!records.length) return;
+  cursor = Math.max(0, Math.min(idx, records.length - 1));
+  const cur = records[cursor];
+  const tel = latestTelemetryUpTo(cursor);
+  document.getElementById('scrubber').value = String(cursor);
+  document.getElementById('scrubber-label').textContent = `${cursor + 1} / ${records.length} (seq ${cur.seq})`;
+  document.getElementById('kpi-seq').textContent = `record seq: ${cur.seq} (${cur.type})`;
+
+  if (tel) {
+    const activeRecUs = (cur.type === 'fault_event' && cur.recovery_us > 0) ? cur.recovery_us : tel.last_recovery_us;
+    const seenRestarts = records.slice(0, cursor + 1).filter(r => r.type === 'fault_event' && r.to === 'RESTARTED').length;
+    const activeRestarts = Math.max(tel.restarts, seenRestarts);
+    const activeInversions = (cur.type === 'fault_event' && cur.inversion && tel.inversions === 0) ? 1 : tel.inversions;
+    document.getElementById('kpi-p50-p99').textContent = `${tel.p50_us} / ${tel.p99_us} us`;
+    document.getElementById('kpi-mean').textContent = `mean: ${Number(tel.mean_us).toFixed(2)} us · p95: ${tel.p95_us} us`;
+    document.getElementById('kpi-p999-max').textContent = `${tel.p999_us} / ${tel.max_us} us`;
+    document.getElementById('kpi-platform').textContent = `platform: ${tel.platform}`;
+    document.getElementById('kpi-pulses').textContent = String(tel.total_pulses);
+    document.getElementById('kpi-dropped').textContent = `dropped: ${tel.dropped_pulses} (wait-free SPSC)`;
+    document.getElementById('kpi-restarts').textContent = String(activeRestarts);
+    document.getElementById('kpi-recovery').textContent =
+      activeRecUs > 0 ? `last recovery: ${activeRecUs} us (< 10ms SLA)` : 'last recovery: awaiting fault';
+    document.getElementById('kpi-inversions').textContent = String(activeInversions);
+  }
+  renderChart(cursor);
+  renderWorkers(tel, cur.type === 'fault_event' ? cur : null);
+  renderEvents(cursor);
+  renderInspector(cursor);
+}
+
+function stopPlayback() {
+  if (playTimer) {
+    clearInterval(playTimer);
+    playTimer = null;
+  }
+  document.getElementById('btn-play').textContent = 'Play';
+}
+
+document.getElementById('btn-play').addEventListener('click', () => {
+  if (playTimer) {
+    stopPlayback();
+    return;
+  }
+  if (cursor >= records.length - 1) cursor = 0;
+  document.getElementById('btn-play').textContent = 'Pause';
+  playTimer = setInterval(() => {
+    if (cursor >= records.length - 1) {
+      stopPlayback();
+      return;
+    }
+    renderAt(cursor + 1);
+  }, 240);
+});
+
+document.getElementById('btn-step').addEventListener('click', () => {
+  stopPlayback();
+  renderAt(cursor + 1 < records.length ? cursor + 1 : 0);
+});
+
+document.getElementById('btn-jump-fault').addEventListener('click', () => {
+  stopPlayback();
+  const next = records.findIndex((r, i) => i > cursor && r.type === 'fault_event' && (r.to === 'BREACH' || r.to === 'RESTARTED' || r.reason === 'PRIORITY_INVERSION'));
+  if (next !== -1) {
+    renderAt(next);
+  } else {
+    const first = records.findIndex(r => r.type === 'fault_event');
+    if (first !== -1) renderAt(first);
+  }
+});
+
+document.getElementById('btn-reset').addEventListener('click', () => {
+  stopPlayback();
+  renderAt(0);
+});
+
+document.getElementById('scrubber').addEventListener('input', (e) => {
+  stopPlayback();
+  renderAt(Number(e.target.value));
+});
+
+document.getElementById('file-input').addEventListener('change', (e) => {
+  const file = e.target.files && e.target.files[0];
+  if (!file) return;
+  stopPlayback();
+  const reader = new FileReader();
+  reader.onload = () => loadDataset(String(reader.result || ''), file.name);
+  reader.readAsText(file);
+});
+
+(async function init() {
+  if (window.location.protocol !== 'file:') {
+    try {
+      const resp = await fetch('./sample_telemetry.jsonl', { cache: 'no-store' });
+      if (resp.ok) {
+        const text = await resp.text();
+        if (text.trim().length > 0) {
+          loadDataset(text, 'sample_telemetry.jsonl');
+          return;
+        }
+      }
+    } catch (_) {
+      // Fallback to embedded trace below
+    }
+  }
+  loadDataset(EMBEDDED_SAMPLE_JSONL, 'EMBEDDED_CAPTURE');
+})();
+</script>
+</body>
+</html>

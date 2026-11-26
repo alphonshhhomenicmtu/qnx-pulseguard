@@ -1,0 +1,24 @@
+# Compiled binaries & build artifacts
+build/
+build_cmake/
+*.o
+*.a
+*.so
+*.dylib
+*.exe
+
+# Runtime telemetry & device snapshots
+pulseguard_dev.json
+pulseguard_dev.bin
+pulseguard_telemetry.jsonl
+test_pg_*
+test_e2e_*
+
+# Large demo video (built locally, excluded from git)
+docs/demo-1080p.mp4
+
+# OS / editor noise
+.DS_Store
+__pycache__/
+*.pyc
+*.tmp
