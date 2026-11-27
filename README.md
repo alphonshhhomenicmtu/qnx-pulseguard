@@ -106,4 +106,4 @@ qnx-2026-pulseguard/
 
 ## License
 
-MIT — see [LICENSE](LICENSE).
+MIT. See [LICENSE](LICENSE).
