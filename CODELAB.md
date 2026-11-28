@@ -47,7 +47,7 @@ cd qnx-2026-pulseguard
 make CXX=clang++ test
 ```
 
-You should see `30/30 tests passed` with zero compiler warnings.
+You should see `31/31 tests passed` with zero compiler warnings.
 
 ### 1.2 Cross-Compile for QNX SDP 8.0
 
@@ -257,7 +257,7 @@ Use **Play**, **Step +1**, **Jump to Fault**, or **Load .jsonl** to inspect your
 | Check | Expected Result | Command |
 |---|---|---|
 | Clean `-Werror` build | `0` warnings, `3` binaries built | `make CXX=clang++ clean all` |
-| Unit + E2E tests | `30/30` passed, `0` hot-path allocations | `make CXX=clang++ test` |
+| Unit + E2E tests | `31/31` passed, `0` hot-path allocations | `make CXX=clang++ test` |
 | Sub-10ms recovery | `cpu_stall` & `missed_pulse` `< 10,000 us` | `./build/fault_injector --mode all` |
 | `/dev/pulseguard` (QNX) | JSONL snapshot printed by `cat /dev/pulseguard` | See [QNX_QEMU_RUNBOOK.md](QNX_QEMU_RUNBOOK.md) |
 

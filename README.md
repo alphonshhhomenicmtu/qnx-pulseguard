@@ -33,7 +33,7 @@ Deterministic C++20 Real-Time Microkernel IPC Telemetry & Deadline Watchdog for 
 ## Quick Start (Host POSIX / macOS / Linux)
 
 ```sh
-# Build all binaries and run the 30-test C++20 unit & E2E suite (-Wall -Wextra -Werror)
+# Build all binaries and run the 31-test C++20 unit & E2E suite (-Wall -Wextra -Werror)
 make CXX=clang++ test
 
 # Run the live daemon with a synthetic CPU stall injected at 450 ms
@@ -66,7 +66,7 @@ See [QNX_QEMU_RUNBOOK.md](QNX_QEMU_RUNBOOK.md) for step-by-step instructions to 
 
 Verified with Apple Clang (`-std=c++20 -O2 -Wall -Wextra -Werror`, zero warnings) on macOS ARM64:
 
-- **Unit & E2E Test Suite (`./build/test_pulseguard`)**: `30/30` tests passed (`66,253+` assertions verified), including zero-allocation hot-path verification (`0` `operator new` calls on ring/histogram/watchdog/JSON serialization).
+- **Unit & E2E Test Suite (`./build/test_pulseguard`)**: `31/31` tests passed (`66,300+` assertions verified), including zero-allocation hot-path verification (`0` `operator new` calls on ring/histogram/watchdog/JSON serialization).
 - **Fault Injector Baseline Trace (`./build/fault_injector --mode all --stall-ms 14 --jsonl-out web/sample_telemetry.jsonl`)**:
   - `total_pulses = 1,354`, `dropped_pulses = 0`
   - `p50 = 7 us`, `p95 = 26 us`, `p99 = 47 us`, `p99.9 = 74 us`, `max = 89 us`, `mean = 9.87 us`
