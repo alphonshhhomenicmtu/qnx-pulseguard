@@ -95,12 +95,16 @@ inline uint64_t now_us() noexcept {
     return now_ns() / 1'000ULL;
 }
 
+// On-wire timestamp is 20 bits (bits 19..0 of the 32-bit pulse value) so the
+// epoch field can occupy 8 bits. The historic helper names stay stable.
+inline constexpr uint32_t kPulseTsMask = 0x000FFFFFU;
+
 inline constexpr uint32_t pack_ts_us24(uint64_t ts_us) noexcept {
-    return static_cast<uint32_t>(ts_us & 0x00FFFFFFULL);
+    return static_cast<uint32_t>(ts_us & kPulseTsMask);
 }
 
 inline constexpr uint64_t delta_ts_us24(uint32_t recv_us24, uint32_t send_us24) noexcept {
-    return static_cast<uint64_t>((recv_us24 - send_us24) & 0x00FFFFFFU);
+    return static_cast<uint64_t>((recv_us24 - send_us24) & kPulseTsMask);
 }
 
 inline constexpr const char* target_platform_tag() noexcept {

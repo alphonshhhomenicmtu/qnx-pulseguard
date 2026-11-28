@@ -98,25 +98,25 @@ Look at how [src/qnx_ipc_bridge.hpp](src/qnx_ipc_bridge.hpp) packs all metadata 
 | Bit Range | Width | Field | Purpose |
 |---|---|---|---|
 | `31 .. 28` | 4 bits | `worker_id` (`0..15`) | Identifies which real-time worker emitted the heartbeat |
-| `27 .. 24` | 4 bits | `epoch & 0x0F` | Prevents stale pre-crash pulses from fooling recovery |
-| `23 .. 0` | 24 bits | `ts_us & 0xFFFFFF` | Microsecond send timestamp (16.77s wrap window) |
+| `27 .. 20` | 8 bits | `epoch & 0xFF` | Keeps epoch 17 distinct from stale epoch 1 |
+| `19 .. 0` | 20 bits | `ts_us & 0xFFFFF` | Microsecond send timestamp (~1.05s wrap window) |
 
 ```cpp
 inline constexpr int32_t pack_pulse_value(uint8_t worker_id, uint16_t epoch,
                                           uint32_t ts_us24) noexcept {
     const uint32_t packed =
         ((static_cast<uint32_t>(worker_id) & 0x0FU) << 28U) |
-        ((static_cast<uint32_t>(epoch) & 0x0FU) << 24U) |
-        (ts_us24 & 0x00FFFFFFU);
+        ((static_cast<uint32_t>(epoch) & 0xFFU) << 20U) |
+        (ts_us24 & 0x000FFFFFU);
     return static_cast<int32_t>(packed);
 }
 ```
 
-Subtracting 24-bit unsigned timestamps modulo `2^24` recovers exact IPC transit latency even across wrap-around boundaries:
+Subtracting 20-bit unsigned timestamps modulo `2^20` recovers exact IPC transit latency even across wrap-around boundaries:
 
 ```cpp
 inline constexpr uint64_t delta_ts_us24(uint32_t recv_us24, uint32_t send_us24) noexcept {
-    return static_cast<uint64_t>((recv_us24 - send_us24) & 0x00FFFFFFU);
+    return static_cast<uint64_t>((recv_us24 - send_us24) & 0x000FFFFFU);
 }
 ```
 
@@ -207,7 +207,7 @@ Three mechanisms keep recovery deterministic and chatter-free:
 
 1. **Hysteresis (`warn_hysteresis = 3`):** A single borderline jitter spike puts the worker in `WARN`, and it returns to `OK` only after 3 consecutive healthy pulses.
 2. **Priority-Inversion Ceiling Escalation (`PTHREAD_PRIO_INHERIT` + Ceiling `45`):** When a low-priority contender blocks a critical worker on the shared resource mutex (`shared_bus_mtx_`), the watchdog flags `PRIORITY_INVERSION` and escalates the worker to `ceiling_priority = 45` until normal cadence resumes.
-3. **Epoch Fencing During Respawn:** When `BREACH` fires, the watchdog increments `expected_epoch`, marks `fault_detected_ns`, retires the stalled thread, and launches the replacement thread with `new_epoch`. Any late pre-crash pulses carrying the old epoch are discarded; recovery latency is measured cleanly from `fault_detected_ns` to arrival of the new worker's `RestartHandshake` pulse (`RESPAWN_COMPLETE`).
+3. **Epoch Fencing During Respawn:** When `BREACH` fires, the watchdog increments `expected_epoch`, marks `fault_detected_ns`, retires the stalled thread, and launches the replacement thread with `new_epoch`. A `RestartHandshake` completes recovery only when its epoch equals `expected_epoch` in full. Epoch 17 therefore rejects stale epoch 1 instead of treating the shared low nibble as `RESPAWN_COMPLETE`. Recovery latency is measured from `fault_detected_ns` to that matching handshake.
 
 ### Hands-On Fault Injection Experiment
 

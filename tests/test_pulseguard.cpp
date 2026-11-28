@@ -89,13 +89,22 @@ bool test_pulse_bitpack_roundtrip() {
     uint16_t epoch = 0;
     uint32_t ts24 = 0;
 
-    const int32_t p1 = pulseguard::pack_pulse_value(0, 1, 0x123456U);
+    const int32_t p1 = pulseguard::pack_pulse_value(0, 1, 0x023456U);
     pulseguard::unpack_pulse_value(p1, wid, epoch, ts24);
-    PG_ASSERT(wid == 0 && epoch == 1 && ts24 == 0x123456U);
+    PG_ASSERT(wid == 0 && epoch == 1 && ts24 == 0x023456U);
 
-    const int32_t p2 = pulseguard::pack_pulse_value(15, 15, 0xFFFFFFU);
+    const int32_t p2 = pulseguard::pack_pulse_value(15, 15, 0x000FFFFFU);
     pulseguard::unpack_pulse_value(p2, wid, epoch, ts24);
-    PG_ASSERT(wid == 15 && epoch == 15 && ts24 == 0xFFFFFFU);
+    PG_ASSERT(wid == 15 && epoch == 15 && ts24 == 0x000FFFFFU);
+
+    // Epoch 17 must survive the 32-bit pulse and stay distinct from epoch 1.
+    const int32_t packed17 = pulseguard::pack_pulse_value(3, 17, 0x000ABCDEU);
+    const int32_t packed_stale = pulseguard::pack_pulse_value(3, 1, 0x000ABCDEU);
+    PG_ASSERT(packed17 != packed_stale);
+    pulseguard::unpack_pulse_value(packed17, wid, epoch, ts24);
+    PG_ASSERT(wid == 3 && epoch == 17 && ts24 == 0x000ABCDEU);
+    pulseguard::unpack_pulse_value(packed_stale, wid, epoch, ts24);
+    PG_ASSERT(epoch == 1);
     return true;
 }
 
@@ -439,6 +448,64 @@ bool test_watchdog_breach_stale_epoch_and_handshake() {
     return true;
 }
 
+// Sixteen breaches advance expected_epoch 1 -> 17. A handshake carrying stale
+// epoch 1 (the old 4-bit alias of 17) must stay RECOVERING. Epoch 17 completes.
+bool test_watchdog_epoch_wrap_rejects_stale_epoch() {
+    MockWatchdogCallbacks cb{};
+    pulseguard::DeadlineWatchdog wd;
+    wd.set_callbacks(mock_respawn, mock_escalate, &cb);
+
+    pulseguard::WorkerConfig wc{};
+    wc.worker_id = 4;
+    wc.warn_deadline_us = 2000;
+    wc.breach_deadline_us = 4000;
+    wc.breach_consecutive_limit = 1;
+    PG_ASSERT(wd.register_worker(wc));
+
+    uint64_t t = 2'000'000'000ULL;
+    uint32_t epoch = 1;
+    wd.on_pulse(4, 10, t, epoch, false, false);
+
+    for (uint32_t step = 0; step < 16; ++step) {
+        t += 5'000'000ULL;
+        wd.on_pulse(4, 5000, t, epoch, false, false);
+        PG_ASSERT(wd.worker(4)->state == pulseguard::WorkerState::RECOVERING);
+        PG_ASSERT(wd.worker(4)->expected_epoch == epoch + 1);
+        const uint32_t next = epoch + 1;
+        if (next == 17) {
+            break;
+        }
+        t += 300'000ULL;
+        wd.on_pulse(4, 12, t, next, true, false);
+        PG_ASSERT(wd.worker(4)->state == pulseguard::WorkerState::RESTARTED);
+        PG_ASSERT(wd.worker(4)->epoch == next);
+        epoch = next;
+    }
+
+    PG_ASSERT(epoch == 16);
+    PG_ASSERT(wd.worker(4)->expected_epoch == 17);
+    PG_ASSERT(wd.worker(4)->state == pulseguard::WorkerState::RECOVERING);
+    const uint64_t recoveries = wd.worker(4)->completed_recoveries;
+    const uint64_t pulses = wd.worker(4)->pulses_received;
+    const uint64_t fault_ns = wd.worker(4)->fault_detected_ns;
+
+    wd.on_pulse(4, 12, t + 200'000ULL, 1, true, false);
+    PG_ASSERT(wd.worker(4)->state == pulseguard::WorkerState::RECOVERING);
+    PG_ASSERT(wd.worker(4)->epoch == 16);
+    PG_ASSERT(wd.worker(4)->expected_epoch == 17);
+    PG_ASSERT(wd.worker(4)->completed_recoveries == recoveries);
+    PG_ASSERT(wd.worker(4)->pulses_received == pulses);
+    PG_ASSERT(wd.worker(4)->fault_detected_ns == fault_ns);
+
+    wd.on_pulse(4, 12, t + 450'000ULL, 17, true, false);
+    PG_ASSERT(wd.worker(4)->state == pulseguard::WorkerState::RESTARTED);
+    PG_ASSERT(wd.worker(4)->epoch == 17);
+    PG_ASSERT(wd.worker(4)->expected_epoch == 17);
+    PG_ASSERT(wd.worker(4)->completed_recoveries == recoveries + 1);
+    PG_ASSERT(wd.worker(4)->last_recovery_us == 450ULL);
+    return true;
+}
+
 bool test_watchdog_tick_missed_pulse() {
     MockWatchdogCallbacks cb{};
     pulseguard::DeadlineWatchdog wd;
@@ -589,8 +656,8 @@ bool test_ipc_transport_roundtrip_and_timeout() {
     pulseguard::PulseFrame send_f{};
     send_f.worker_id = 3;
     send_f.kind = pulseguard::PulseKind::RestartHandshake;
-    send_f.epoch = 7;
-    send_f.send_ts_us24 = 0x00AABBCCU;
+    send_f.epoch = 17;
+    send_f.send_ts_us24 = 0x000ABBCCU;
     send_f.priority = 30;
     send_f.seq = 99;
     PG_ASSERT(tx.send_pulse(send_f));
@@ -599,8 +666,8 @@ bool test_ipc_transport_roundtrip_and_timeout() {
     PG_ASSERT(tx.receive_pulse(recv_f, 50) == pulseguard::PulseTransport::RecvStatus::Received);
     PG_ASSERT(recv_f.worker_id == 3);
     PG_ASSERT(recv_f.kind == pulseguard::PulseKind::RestartHandshake);
-    PG_ASSERT(recv_f.epoch == 7);
-    PG_ASSERT(recv_f.send_ts_us24 == 0x00AABBCCU);
+    PG_ASSERT(recv_f.epoch == 17);
+    PG_ASSERT(recv_f.send_ts_us24 == 0x000ABBCCU);
     tx.close();
     return true;
 }
@@ -826,6 +893,7 @@ int main() {
     RUN_TEST(test_watchdog_register_bounds);
     RUN_TEST(test_watchdog_warn_and_hysteresis);
     RUN_TEST(test_watchdog_breach_stale_epoch_and_handshake);
+    RUN_TEST(test_watchdog_epoch_wrap_rejects_stale_epoch);
     RUN_TEST(test_watchdog_tick_missed_pulse);
     RUN_TEST(test_watchdog_priority_inversion_escalation);
     RUN_TEST(test_watchdog_event_ring_wrap);

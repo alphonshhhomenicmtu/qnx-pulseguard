@@ -37,14 +37,15 @@ struct PulseFrame {
     uint32_t seq{0};
 };
 
-// Packs worker_id (4 bits), epoch (4 bits), and 24-bit microsecond timestamp
-// into QNX's native 32-bit pulse value payload.
+// Packs worker_id (4 bits), epoch (8 bits), and a 20-bit microsecond timestamp
+// into QNX's native 32-bit pulse value. Eight epoch bits keep epoch 17 distinct
+// from stale epoch 1 (a 4-bit nibble aliases 17 to 1).
 inline constexpr int32_t pack_pulse_value(uint8_t worker_id, uint16_t epoch,
                                           uint32_t ts_us24) noexcept {
     const uint32_t packed =
         ((static_cast<uint32_t>(worker_id) & 0x0FU) << 28U) |
-        ((static_cast<uint32_t>(epoch) & 0x0FU) << 24U) |
-        (ts_us24 & 0x00FFFFFFU);
+        ((static_cast<uint32_t>(epoch) & 0xFFU) << 20U) |
+        (ts_us24 & kPulseTsMask);
     return static_cast<int32_t>(packed);
 }
 
@@ -53,8 +54,8 @@ inline constexpr void unpack_pulse_value(int32_t raw_value, uint8_t& worker_id,
                                          uint32_t& ts_us24) noexcept {
     const uint32_t u = static_cast<uint32_t>(raw_value);
     worker_id = static_cast<uint8_t>((u >> 28U) & 0x0FU);
-    epoch = static_cast<uint16_t>((u >> 24U) & 0x0FU);
-    ts_us24 = u & 0x00FFFFFFU;
+    epoch = static_cast<uint16_t>((u >> 20U) & 0xFFU);
+    ts_us24 = u & kPulseTsMask;
 }
 
 struct SchedStatus {

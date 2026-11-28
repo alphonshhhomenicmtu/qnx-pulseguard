@@ -1,5 +1,8 @@
 # QNX-PulseGuard
 
+
+- **Narrated 1080p Demo (YouTube)**: https://www.youtube.com/watch?v=L1PQB58JKWY
+
 Deterministic C++20 Real-Time Microkernel IPC Telemetry & Deadline Watchdog for **QNX Neutrino RTOS 8.0** (with full POSIX/macOS/Linux host-parity compilation and execution).
 
 - **Live Telemetry Console (GitHub Pages):** https://alphonshhhomenicmtu.github.io/qnx-pulseguard/
@@ -14,7 +17,7 @@ Deterministic C++20 Real-Time Microkernel IPC Telemetry & Deadline Watchdog for 
 ### Key Components
 
 - **Native QNX Neutrino 8.0 IPC & Resource Manager (`src/qnx_ipc_bridge.hpp`, `src/resmgr_pulseguard.cpp`)**:
-  - Uses `ChannelCreate_r()`, `ConnectAttach_r()`, `MsgSendPulse_r()`, `TimerTimeout_r()`, and `MsgReceivePulse_r()` under `#ifdef __QNXNTO__`, packing `(worker_id, epoch, ts_us24)` inside QNX's 32-bit `struct _pulse` payload.
+  - Uses `ChannelCreate_r()`, `ConnectAttach_r()`, `MsgSendPulse_r()`, `TimerTimeout_r()`, and `MsgReceivePulse_r()` under `#ifdef __QNXNTO__`, packing `(worker_id:4, epoch:8, ts_us:20)` inside QNX's 32-bit `struct _pulse` payload.
   - Attaches `/dev/pulseguard` via `resmgr_attach()`, serving zero-allocation JSONL telemetry on `read()` (`io_read` / `read64`) and CRC32-protected binary snapshots (`TelemetryBinaryFrame`) via `devctl()` (`DCMD_PULSEGUARD_GET_BINARY`).
   - Exercises `ClockCycles()` + `SYSPAGE_ENTRY(qtime)->cycles_per_sec` for sub-microsecond hardware timestamping and `SCHED_FIFO` + `PTHREAD_PRIO_INHERIT` / `PTHREAD_PRIO_PROTECT` thread/mutex attributes.
 - **Lock-Free Real-Time Core (`include/pulseguard/`)**:

@@ -188,11 +188,13 @@ public:
         }
 
         // Ignore stale pre-restart pulses while awaiting the next epoch handshake.
+        // Full-width compare: epoch 17 must not accept stale epoch 1 just because
+        // both share the low nibble 0x1.
         if (w.state == WorkerState::RECOVERING && !is_restart_handshake) {
             return;
         }
         if (w.state == WorkerState::RECOVERING && is_restart_handshake &&
-            ((epoch & 0x0FU) != (w.expected_epoch & 0x0FU))) {
+            epoch != w.expected_epoch) {
             return;
         }
 
